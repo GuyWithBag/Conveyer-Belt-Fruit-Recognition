@@ -47,6 +47,15 @@ void turnOffAllLEDs()
     digitalWrite(ledPotato, LOW);
 }
 
+void sortProcess(int ledPin, int frequency) {
+  digitalWrite(ledPin, frequency); // Turn on Apple LED
+  stopElevator();
+  runSortingForward();          // Move sorting belt forward
+  delay(3000);                  // Run for 3 seconds
+  stopSorting();                // Stop sorting belt
+  runElevator();
+}
+
 void setup()
 {
     // Initialize pins
@@ -84,24 +93,15 @@ void loop()
         // Process the received fruit
         if (receivedFruit == "Apple")
         {
-            digitalWrite(ledApple, HIGH); // Turn on Apple LED
-            runSortingForward();          // Move sorting belt forward
-            delay(3000);                  // Run for 3 seconds
-            stopSorting();                // Stop sorting belt
+            sortProcess(ledApple, HIGH); // Turn on Apple LED
         }
         else if (receivedFruit == "Onion")
         {
-            digitalWrite(ledOnion, HIGH); // Turn on Onion LED
-            runSortingForward();          // Move sorting belt forward
-            delay(3000);                  // Run for 3 seconds
-            stopSorting();                // Stop sorting belt
+            sortProcess(ledOnion, HIGH); // Turn on Onion LED
         }
         else if (receivedFruit == "Potato")
         {
-            digitalWrite(ledPotato, HIGH); // Turn on Potato LED
-            runSortingBackward();          // Move sorting belt backward
-            delay(3000);                   // Run for 3 seconds
-            stopSorting();                 // Stop sorting belt
+            sortProcess(ledPotato, HIGH); // Turn on Potato LED
         }
     }
 }

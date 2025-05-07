@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import requests
+import serial
+import time
 from tensorflow.keras.models import load_model
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -70,6 +72,14 @@ class FruitDetectionApp(App):
         self.current_fruit = None
         self.nutrition_cache = {}  # Cache for nutrition data
         self.recipes_cache = {}    # Cache for recipes
+        self.serial_port = None
+        self.serial_connected = False
+        try:
+            self.serial_port = serial.Serial('COM3', 9600, timeout=1)  # Adjust COM port as needed
+            time.sleep(2)  # Wait for serial connection to stabilize
+            self.serial_connected = True
+        except serial.SerialException:
+            self.serial_connected = False
 
     def build(self):
         # Set window size (simulates Android portrait mode)
@@ -93,8 +103,18 @@ class FruitDetectionApp(App):
             valign='middle'
         )
 
+        # Serial status label
+        self.serial_label = Label(
+            text="Serial: " + ("Connected" if self.serial_connected else "Not Connected"),
+            size_hint=(1, 0.05),
+            font_size='20sp',
+            color=(0.2, 0.2, 0.2, 1),
+            halign='center',
+            valign='middle'
+        )
+
         # Info layout for nutrition and recipes
-        info_layout = BoxLayout(orientation='vertical', size_hint=(1, 0.45))
+        info_layout = BoxLayout(orientation='vertical', size_hint=(1, 0.4))
 
         # Nutrition section
         nutrition_container = BoxLayout(orientation='vertical', size_hint=(1, 0.5))
@@ -167,6 +187,7 @@ class FruitDetectionApp(App):
         # Add widgets to main layout
         layout.add_widget(self.camera)
         layout.add_widget(self.label)
+        layout.add_widget(self.serial_label)
         layout.add_widget(info_layout)
         layout.add_widget(self.btn)
 
@@ -206,9 +227,12 @@ class FruitDetectionApp(App):
             class_idx = np.argmax(predictions)
             confidence = np.max(predictions)
             fruit_name = fruit_classes[class_idx]
+            if confidence < 0.99:
+                self.label.text = f"{fruit_name} ({confidence:.2f}) confidence level too low."
+                return
             self.label.text = f"{fruit_name} ({confidence:.2f})"
 
-            # Only fetch data if the fruit changes
+            # Only process if fruit changes
             if fruit_name != self.current_fruit:
                 self.current_fruit = fruit_name
 
@@ -229,6 +253,19 @@ class FruitDetectionApp(App):
                     recipes_text = "\n".join(recipes[:5]) if recipes else "Not Found"
                     self.recipes_cache[fruit_name] = recipes_text
                 self.recipes_label.text = recipes_text
+
+                # Send to Arduino if relevant fruit
+                if fruit_name in ["Apple", "Onion", "Potato"] and self.serial_connected:
+                    try:
+                        self.serial_port.write((fruit_name + '\n').encode())
+                    except serial.SerialException:
+                        self.serial_label.text = "Serial: Error Sending Data"
+                        self.serial_connected = False
+
+    def on_stop(self):
+        # Close serial port when app stops
+        if self.serial_port and self.serial_connected:
+            self.serial_port.close()
 
 if __name__ == "__main__":
     FruitDetectionApp().run()
