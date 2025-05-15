@@ -1,107 +1,128 @@
-// Pin definitions
-const int elevatorMotorPin1 = 9; // Elevator motor control pin 1 (L298N IN1)
-const int elevatorMotorPin2 = 8; // Elevator motor control pin 2 (L298N IN2)
-const int sortingMotorPin1 = 7;  // Sorting motor control pin 1 (L298N IN3)
-const int sortingMotorPin2 = 6;  // Sorting motor control pin 2 (L298N IN4)
-const int ledApple = 5;          // LED for Apple (Red)
-const int ledOnion = 4;          // LED for Onion (Green)
-const int ledPotato = 3;         // LED for Potato (Blue)
+#include <AFMotor.h>
+
+// Motor definitions (Adafruit Motor Shield V1)
+AF_DCMotor elevatorMotor(2); // Elevator motor on M1
+AF_DCMotor sortingMotor(1);  // Sorting motor on M2
+
+// LED pin definitions
+const int ledGinger = 7; // LED for Ginger
+const int ledOnion = 5;  // LED for Onion
+const int ledPotato = 2; // LED for Potato
+
+// Motor speed (0-255)
+const int motorSpeed = 255; // Adjust as needed
 
 String receivedFruit = ""; // Stores incoming serial data
-
-// Motor control functions
-void runElevator()
-{
-    digitalWrite(elevatorMotorPin1, HIGH); // Move elevator forward
-    digitalWrite(elevatorMotorPin2, LOW);
-}
-
-void stopElevator()
-{
-    digitalWrite(elevatorMotorPin1, LOW);
-    digitalWrite(elevatorMotorPin2, LOW);
-}
-
-void runSortingForward()
-{
-    digitalWrite(sortingMotorPin1, HIGH); // Move sorting belt forward
-    digitalWrite(sortingMotorPin2, LOW);
-}
-
-void runSortingBackward()
-{
-    digitalWrite(sortingMotorPin1, LOW); // Move sorting belt backward
-    digitalWrite(sortingMotorPin2, HIGH);
-}
-
-void stopSorting()
-{
-    digitalWrite(sortingMotorPin1, LOW);
-    digitalWrite(sortingMotorPin2, LOW);
-}
+String lastFruit = "";     // Stores the last received fruit
 
 void turnOffAllLEDs()
 {
-    digitalWrite(ledApple, LOW);
+    digitalWrite(ledGinger, LOW);
     digitalWrite(ledOnion, LOW);
     digitalWrite(ledPotato, LOW);
 }
 
-void sortProcess(int ledPin, int frequency) {
-  digitalWrite(ledPin, frequency); // Turn on Apple LED
-  stopElevator();
-  runSortingForward();          // Move sorting belt forward
-  delay(3000);                  // Run for 3 seconds
-  stopSorting();                // Stop sorting belt
-  runElevator();
-}
-
 void setup()
 {
-    // Initialize pins
-    pinMode(elevatorMotorPin1, OUTPUT);
-    pinMode(elevatorMotorPin2, OUTPUT);
-    pinMode(sortingMotorPin1, OUTPUT);
-    pinMode(sortingMotorPin2, OUTPUT);
-    pinMode(ledApple, OUTPUT);
+    // Initialize LED pins
+    pinMode(ledGinger, OUTPUT);
     pinMode(ledOnion, OUTPUT);
     pinMode(ledPotato, OUTPUT);
 
     // Start serial communication
     Serial.begin(9600);
 
-    // Ensure all motors and LEDs are off initially
-    stopElevator();
-    stopSorting();
+    // Set motor speeds
+    elevatorMotor.setSpeed(255);
+    sortingMotor.setSpeed(255);
+
+    // Ensure motors and LEDs are off initially
+    elevatorMotor.run(RELEASE);
+    sortingMotor.run(RELEASE);
     turnOffAllLEDs();
 
-    // Start elevator motor
-    runElevator();
+    // Start elevator motor (continuous forward)
+    elevatorMotor.run(FORWARD);
 }
 
 void loop()
 {
-    // Check for incoming serial data
+    turnOffAllLEDs();
     if (Serial.available() > 0)
     {
         receivedFruit = Serial.readStringUntil('\n');
-        receivedFruit.trim(); // Remove any whitespace
-
-        // Turn off all LEDs before setting new state
-        turnOffAllLEDs();
+        receivedFruit.trim(); // Remove whitespace
 
         // Process the received fruit
-        if (receivedFruit == "Apple")
+        Serial.println(receivedFruit); // Debug output
+
+        // Special case: Last fruit was Onion, current is Potato
+        if (lastFruit == "Onion" && receivedFruit == "Potato")
         {
-            sortProcess(ledApple, HIGH); // Turn on Apple LED
+            digitalWrite(ledPotato, HIGH);
+            sortingMotor.run(FORWARD);
+            elevatorMotor.run(RELEASE);
+            delay(330); // 300 + 30
+            elevatorMotor.run(FORWARD);
+            sortingMotor.run(RELEASE);
         }
-        else if (receivedFruit == "Onion")
+        else if (lastFruit == "Ginger" && receivedFruit == "Onion")
         {
-            sortProcess(ledOnion, HIGH); // Turn on Onion LED
+            digitalWrite(ledPotato, HIGH);
+            sortingMotor.run(BACKWARD);
+            elevatorMotor.run(RELEASE);
+            delay(660); // 300 + 30
+            elevatorMotor.run(FORWARD);
+            sortingMotor.run(RELEASE);
         }
-        else if (receivedFruit == "Potato")
+        else
         {
-            sortProcess(ledPotato, HIGH); // Turn on Potato LED
+            // Standard fruit-specific logic
+            if (receivedFruit == "Ginger")
+            {
+                // digitalWrite(ledGinger, HIGH);
+                sortingMotor.run(FORWARD);
+                elevatorMotor.run(RELEASE);
+                if (lastFruit == "Onion")
+                {
+                    delay(660); // 2 * 300 + 30
+                }
+                else
+                {
+                    delay(330); // 300 + 30
+                }
+                elevatorMotor.run(FORWARD);
+                sortingMotor.run(RELEASE);
+            }
+            else if (receivedFruit == "Onion")
+            {
+                digitalWrite(ledOnion, HIGH);
+                sortingMotor.run(BACKWARD);
+                elevatorMotor.run(RELEASE);
+                delay(330); // 300 + 30
+                elevatorMotor.run(FORWARD);
+                sortingMotor.run(RELEASE);
+            }
+            else if (receivedFruit == "Potato")
+            {
+                digitalWrite(ledPotato, HIGH);
+                if (lastFruit != "")
+                {
+                    sortingMotor.run(BACKWARD);
+                    elevatorMotor.run(RELEASE);
+                    delay(330); // 300 + 30
+                    sortingMotor.run(RELEASE);
+                    elevatorMotor.run(FORWARD);
+                }
+                // No motor movement if lastFruit is empty
+            }
+            delay(2000);
+        }
+
+        // Update lastFruit if the received fruit is valid
+        if (receivedFruit == "Ginger" || receivedFruit == "Onion" || receivedFruit == "Potato")
+        {
+            lastFruit = receivedFruit;
         }
     }
 }
